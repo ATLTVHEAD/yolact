@@ -53,11 +53,11 @@ def parse_args(argv=None):
                         help='Whether compute NMS cross-class or per-class.')
     parser.add_argument('--display_masks', default=True, type=str2bool,
                         help='Whether or not to display masks over bounding boxes')
-    parser.add_argument('--display_bboxes', default=True, type=str2bool,
+    parser.add_argument('--display_bboxes', default=False, type=str2bool,
                         help='Whether or not to display bboxes around masks')
-    parser.add_argument('--display_text', default=True, type=str2bool,
+    parser.add_argument('--display_text', default=False, type=str2bool,
                         help='Whether or not to display text (class [score])')
-    parser.add_argument('--display_scores', default=True, type=str2bool,
+    parser.add_argument('--display_scores', default=False, type=str2bool,
                         help='Whether or not to display scores in addition to classes')
     parser.add_argument('--display', dest='display', action='store_true',
                         help='Display qualitative results instead of quantitative ones.')
@@ -93,13 +93,13 @@ def parse_args(argv=None):
                         help='The seed to pass into random.seed. Note: this is only really for the shuffle and does not (I think) affect cuda stuff.')
     parser.add_argument('--mask_proto_debug', default=False, dest='mask_proto_debug', action='store_true',
                         help='Outputs stuff for scripts/compute_mask.py.')
-    parser.add_argument('--no_crop', default=False, dest='crop', action='store_false',
+    parser.add_argument('--no_crop', default=True, dest='crop', action='store_false',
                         help='Do not crop output masks with the predicted bounding box.')
     parser.add_argument('--image', default=None, type=str,
                         help='A path to an image to use for display.')
     parser.add_argument('--images', default=None, type=str,
                         help='An input folder of images and output folder to save detected images. Should be in the format input->output.')
-    parser.add_argument('--video', default=None, type=str,
+    parser.add_argument('--video', default=None, #type=str,
                         help='A path to a video to evaluate on. Passing in a number will use that index webcam.')
     parser.add_argument('--video_multiframe', default=1, type=int,
                         help='The number of frames to evaluate in parallel to make videos play at higher fps.')
@@ -205,9 +205,17 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             inv_alph_cumul = inv_alph_masks[:(num_dets_to_consider-1)].cumprod(dim=0)
             masks_color_cumul = masks_color[1:] * inv_alph_cumul
             masks_color_summand += masks_color_cumul.sum(dim=0)
-
+    #
+    #
+    #
+    # This is the place to do the image manipulation
         img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
-    
+        img_gpu = inv_alph_masks.prod(dim=0) + masks_color_summand
+    #
+    #
+    #
+    #
+    #
     if args.display_fps:
             # Draw the box for the fps on the GPU
         font_face = cv2.FONT_HERSHEY_DUPLEX
@@ -633,7 +641,7 @@ class CustomDataParallel(torch.nn.DataParallel):
         # Note that I don't actually want to convert everything to the output_device
         return sum(outputs, [])
 
-def evalvideo(net:Yolact, path:str, out_path:str=None):
+def evalvideo(net:Yolact, path, out_path:str=None):
     # If the path is a digit, parse it as a webcam index
     is_webcam = path.isdigit()
     
@@ -642,9 +650,15 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     
     if is_webcam:
         vid = cv2.VideoCapture(int(path))
+        vid.set(cv2.CAP_PROP_FRAME_WIDTH,1280)
+        vid.set(cv2.CAP_PROP_FRAME_HEIGHT,720)
     else:
+        #if "rtmp" in path:
+        #    print("rtmp")
+        #    vid = cv2.VideoCapture("rtmp://192.168.1.202/live/test")
+        #else:
         vid = cv2.VideoCapture(path)
-    
+
     if not vid.isOpened():
         print('Could not open video "%s"' % path)
         exit(-1)
@@ -656,7 +670,10 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     if is_webcam:
         num_frames = float('inf')
     else:
-        num_frames = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+        if "rtmp" in path:
+            num_frames = float('inf')
+        else:
+            num_frames = round(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
     net = CustomDataParallel(net).cuda()
     transform = torch.nn.DataParallel(FastBaseTransform()).cuda()
@@ -885,10 +902,11 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         evalimages(net, inp, out)
         return
     elif args.video is not None:
-        if ':' in args.video:
-            inp, out = args.video.split(':')
+        if '~' in args.video:
+            inp, out = args.video.split('~')
             evalvideo(net, inp, out)
         else:
+            #print(type(args.video))
             evalvideo(net, args.video)
         return
 
