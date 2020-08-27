@@ -55,9 +55,9 @@ def parse_args(argv=None):
                         help='Whether or not to display masks over bounding boxes')
     parser.add_argument('--display_bboxes', default=False, type=str2bool,
                         help='Whether or not to display bboxes around masks')
-    parser.add_argument('--display_text', default=False, type=str2bool,
+    parser.add_argument('--display_text', default=True, type=str2bool,
                         help='Whether or not to display text (class [score])')
-    parser.add_argument('--display_scores', default=False, type=str2bool,
+    parser.add_argument('--display_scores', default=True, type=str2bool,
                         help='Whether or not to display scores in addition to classes')
     parser.add_argument('--display', dest='display', action='store_true',
                         help='Display qualitative results instead of quantitative ones.')
@@ -99,7 +99,7 @@ def parse_args(argv=None):
                         help='A path to an image to use for display.')
     parser.add_argument('--images', default=None, type=str,
                         help='An input folder of images and output folder to save detected images. Should be in the format input->output.')
-    parser.add_argument('--video', default=None, #type=str,
+    parser.add_argument('--video', default=None, type=str,
                         help='A path to a video to evaluate on. Passing in a number will use that index webcam.')
     parser.add_argument('--video_multiframe', default=1, type=int,
                         help='The number of frames to evaluate in parallel to make videos play at higher fps.')
@@ -113,6 +113,8 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
+    parser.add_argument('--greenscreen', default=False,
+                        help='When displaying / saving video, draw only the masked areas, fill the rest of the video with nothing or greenscreen')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
@@ -132,7 +134,7 @@ coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 color_cache = defaultdict(lambda: {})
 
-def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
+def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=1.0, fps_str=''):
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
     """
@@ -205,17 +207,20 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             inv_alph_cumul = inv_alph_masks[:(num_dets_to_consider-1)].cumprod(dim=0)
             masks_color_cumul = masks_color[1:] * inv_alph_cumul
             masks_color_summand += masks_color_cumul.sum(dim=0)
-    #
-    #
-    #
-    # This is the place to do the image manipulation
-        img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
-        img_gpu = inv_alph_masks.prod(dim=0) + masks_color_summand
-    #
-    #
-    #
-    #
-    #
+
+
+
+        if args.greenscreen:
+            # This is where we delete everything that is not in the mask
+            img_gpu = img_gpu * (1-inv_alph_masks.prod(dim=0))
+        else: 
+            # This is the place to do the image manipulation
+            img_gpu = img_gpu * inv_alph_masks.prod(dim=0) # + masks_color_summand
+
+
+
+
+
     if args.display_fps:
             # Draw the box for the fps on the GPU
         font_face = cv2.FONT_HERSHEY_DUPLEX
