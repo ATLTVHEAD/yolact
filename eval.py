@@ -113,8 +113,10 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
-    parser.add_argument('--greenscreen', default=False,
+    parser.add_argument('--greenscreen', default=False, type=str,
                         help='When displaying / saving video, draw only the masked areas, fill the rest of the video with nothing or greenscreen')
+    parser.add_argument('--window_number', default="0", type=str,
+                        help='When displaying video, this is the window changer per usage')
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
@@ -210,10 +212,10 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
 
 
-        if args.greenscreen:
+        if args.greenscreen == "True" or args.greenscreen == "true":
             # This is where we delete everything that is not in the mask
             img_gpu = img_gpu * (1-inv_alph_masks.prod(dim=0))
-        else: 
+        if args.greenscreen == "False" or args.greenscreen == "false": 
             # This is the place to do the image manipulation
             img_gpu = img_gpu * inv_alph_masks.prod(dim=0) # + masks_color_summand
 
@@ -668,7 +670,8 @@ def evalvideo(net:Yolact, path, out_path:str=None):
         print('Could not open video "%s"' % path)
         exit(-1)
 
-    target_fps   = round(vid.get(cv2.CAP_PROP_FPS))
+    target_fps   = round(28.00)
+    #target_fps   = round(vid.get(cv2.CAP_PROP_FPS))
     frame_width  = round(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = round(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
@@ -756,7 +759,8 @@ def evalvideo(net:Yolact, path, out_path:str=None):
                         video_frame_times.add(next_time - last_time)
                         video_fps = 1 / video_frame_times.get_avg()
                     if out_path is None:
-                        cv2.imshow(path, frame_buffer.get())
+                        cv2.imshow(path + "_" + args.window_number, frame_buffer.get())
+                        #cv2.imshow(path, frame_buffer.get())
                     else:
                         out.write(frame_buffer.get())
                     frames_displayed += 1
