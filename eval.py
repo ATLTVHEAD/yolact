@@ -670,7 +670,8 @@ def evalvideo(net:Yolact, path, out_path:str=None):
         print('Could not open video "%s"' % path)
         exit(-1)
 
-    target_fps   = round(28.00)
+    target_fps   = round(24.00)
+    print(target_fps)
     #target_fps   = round(vid.get(cv2.CAP_PROP_FPS))
     frame_width  = round(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = round(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
